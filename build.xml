@@ -1,0 +1,65 @@
+<?xml version="1.0"?>
+<!--
+     Script para envio das mudanças para o servidor de produção
+-->
+<project name="PROJECTNAME" basedir="." default="buildlocal">
+  <!-- define as variáveis DSTAMP, TSTAMP e TODAY -->
+  <tstamp />
+  <php function="dirname" returnProperty="app.basePath">
+    <param value="${phing.file}" />
+  </php>
+  <echo message="BasePath do Banco: ${app.basePath}" />
+
+  <target name="hello" description="Mostra a mensagem de atualização do banco">
+      <echo msg="Para continuar, você já deve ter criado a tabela changelog nos seus bancos... [enter] para continuar" />
+      <!-- pula a pausa se for configurado pra isso -->
+      <if>
+        <not>
+          <isset property="app.jumphello" />
+        </not>
+        <then>
+          <input propertyName="tt">[enter] para continuar</input>
+        </then>
+      </if>
+  </target>
+
+  <!-- Cria a task de migração do banco -->
+  <target name="migratemain" description="Migração do banco de dados principal">
+    <!-- Carrega a task do dbdeploy -->
+    <taskdef name="dbdeploy" classname="phing.tasks.ext.dbdeploy.DbDeployTask" />
+
+    <!-- esses arquivos conterão os scripts de geração e rollback do banco consolidados -->
+    <property name="build.dbdeploy.deployfile" value="${db.builddir}/dbdeploy/scripts/sql/deploy-${DSTAMP}${TSTAMP}.sql" />
+    <property name="build.dbdeploy.undofile" value="${db.builddir}/dbdeploy/scripts/sql/undo-${DSTAMP}${TSTAMP}.sql" />
+
+    <dbdeploy
+      url="mysql:host=${db.main.host};dbname=${db.main.database}"
+      userid="${db.main.user}"
+      password="${db.main.pass}"
+      dir="${app.basePath}/${db.main.deltadir}"
+      outputfile="${build.dbdeploy.deployfile}"
+      undooutputfile="${build.dbdeploy.undofile}" />
+
+    <exec
+      command="${db.mysql} -h ${db.main.host} -u ${db.main.user} -p${db.main.pass} ${db.main.database} &lt; ${build.dbdeploy.deployfile}"
+      dir="${db.builddir}"
+      checkreturn="true" />
+
+  </target>
+  <target name="buildlocal" description="Executa as duas migrações de banco de dados no ambiente de desenvolvimento/local" depends="hello">
+    <!-- Carrega o arquivos de propriedades -->
+    <property file="${app.basePath}/local.properties" />
+
+    <phingcall target="migratemain" />
+
+    <echo msg="Migração do ambiente Local efetuada com sucesso!" />
+  </target>
+  <target name="buildprod" description="Executa as migrações do banco de dados na produção" depends="hello">
+    <!-- Carrega o arquivos de propriedades -->
+    <property file="${app.basePath}/prod.properties" />
+
+    <phingcall target="migratemain" />
+
+    <echo msg="Migração do ambiente de Produção efetuada com sucesso!" />
+  </target>
+</project>
